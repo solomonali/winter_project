@@ -14,6 +14,9 @@
 #define MILLION 1000000.0
 #define SAMPLES 2000
 
+
+int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T, int *n_P, int *n_T);
+
 int main()
 {
     int i, j, idx, val;
@@ -32,9 +35,9 @@ int main()
     float *P_i, *T_i, *S_i, *S_min;
     double *t, start_epoch, end_epoch;
     struct timeval start, end;
-    struct data_t accel_data, gyro_data;
-    struct accel_scale_t a_scale = A_SCALE_16G;
-    struct gyro_scale_t g_scale = G_SCALE_2000DPS;
+    data_t accel_data, gyro_data;
+    accel_scale_t a_scale = A_SCALE_16G;
+    gyro_scale_t g_scale = G_SCALE_2000DPS;
 
     accel = accel_init();
     set_accel_scale(accel, a_scale);
@@ -81,10 +84,10 @@ int main()
 		start_epoch = start.tv_sec - start.tv_usec/MILLION;
 		end_epoch = end.tv_sec - end.tv_usec/MILLION;
 		
-		t[k] = (start_epoch + end_epoch)/2.0;
+		t[i] = (start_epoch + end_epoch)/2.0;
 	}
 	
-	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, n_P, n_T, accel, gyro, a_res, g_res);
+	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, n_P, n_T);
 	
 	if (val < 0) {
 		fprintf(stderr, "find_peaks_and_throughs failed\n");
