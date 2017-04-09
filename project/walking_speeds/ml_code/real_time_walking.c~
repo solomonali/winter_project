@@ -8,8 +8,8 @@
 
 #include <sys/time.h>
 #include <signal.h>
-#include "LSM9DS0.h"
 #include <mraa/i2c.h>
+#include "LSM9DS0.h"
 
 #define MILLION 1000000.0
 #define SAMPLES 2000
@@ -37,7 +37,7 @@ int main()
     struct timeval start, end;
     data_t accel_data, gyro_data;
     accel_scale_t a_scale = A_SCALE_16G;
-    gyro_scale_t g_scale = G_SCALE_2000DPS;
+    t gyro_scale_t g_scale = G_SCALE_2000DPS;
 
     accel = accel_init();
     set_accel_scale(accel, a_scale);
