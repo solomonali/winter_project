@@ -85,6 +85,10 @@ int main()
 		end_epoch = end.tv_sec - end.tv_usec/MILLION;
 		
 		t[i] = (start_epoch + end_epoch)/2.0;
+
+		printf("i: %d\t t: %d\t ax: %f\t ay: %f\t az: %f\t gx: %f\ gy: %f\t gz: %f\n", i, t[i], ax[i], ay[i], az[i], gx[i], gy[i], gz[i]);
+
+		usleep(1000);
 	}
 	
 	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, n_P, n_T);
@@ -107,20 +111,21 @@ int main()
 
 
 	//determine walking speed for each stride
-	for (j = 0; j < n_S; j++)		    
-	max = -100;
-       
-        input[0] = (float) a;
-        input[1] = (float) b;
-        input[2] = (float) c;
-        calc_out = fann_run(ann, input);
+	for (j = 0; j < n_S; j++)
+	{
+		max = -100;   
+	        input[0] = (float) a;
+        	input[1] = (float) b;
+	        input[2] = (float) c;
+        	calc_out = fann_run(ann, input);
 
-        for (i = 0; i < 4; i++) {
-            if (calc_out[i] > max) {
-                max = calc_out[i];
-                speed = i+1;
-            }
-        }
+	        for (i = 0; i < 4; i++) {
+         	   if (calc_out[i] > max) {
+                	max = calc_out[i];
+	                speed = i+1;
+        	    }
+       		}
+	}
 
 	printf(" walking values: %f, %f, %f -> speed is %d\n", a, b,c, speed);
         sleep(1);
