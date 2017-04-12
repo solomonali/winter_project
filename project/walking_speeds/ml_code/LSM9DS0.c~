@@ -369,7 +369,7 @@ void set_mag_scale(mraa_i2c_context mag, mag_scale_t m_scale)
 
 data_t read_accel(mraa_i2c_context accel, float a_res)
 {
-	int32_t raw_accel_x, raw_accel_y, raw_accel_z;
+	int16_t raw_accel_x, raw_accel_y, raw_accel_z;
 	uint8_t data_byte[6];
 	data_t data;
 	

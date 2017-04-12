@@ -384,13 +384,13 @@ data_t read_accel(mraa_i2c_context accel, float a_res)
 	raw_accel_y = ((data_byte[3] << 8) | data_byte[2]);
 	raw_accel_z = ((data_byte[5] << 8) | data_byte[4]);
 
-	printf("\t%d \t%d \t%d\n", raw_accel_x, raw_accel_y, raw_accel_z);
+//	printf("\t%d \t%d \t%d\n", raw_accel_x, raw_accel_y, raw_accel_z);
 	
 	data.x = raw_accel_x * a_res;
 	data.y = raw_accel_y * a_res;
 	data.z = raw_accel_z * a_res;
 	
-	printf("\t%f \t%f \t%f\n", data.x, data.y, data.z);
+//	printf("\t%f \t%f \t%f\n", data.x, data.y, data.z);
 	
 	return data;
 }
