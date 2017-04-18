@@ -12,7 +12,7 @@
 #include "LSM9DS0.h"
 
 #define MILLION 1000000.0
-#define SAMPLES 6000
+#define SAMPLES 3000
 
 sig_atomic_t volatile run_flag = 1;
 
@@ -28,7 +28,7 @@ void clear_buffer(float *arr, float val, int n);
 int main()
 {
     int i, j, idx, idx_min, idx_next,  val;
-    int speed;
+    int *speed;
     int n_S, n_P, n_T;
     fann_type *calc_out;
     fann_type input[3];
@@ -58,10 +58,27 @@ int main()
 
 
     signal(SIGINT, do_when_interrupted);
+    
+    P_i = (float *) malloc(sizeof(float) * SAMPLES);
+    T_i = (float *) malloc(sizeof(float) * SAMPLES);
+    periods = (double *) malloc(sizeof(double) * 100);
+    min = (float *) malloc(sizeof(float) * 100);
+    max = (float *) malloc(sizeof(float) * 100);
+    S_i = (float *) malloc(sizeof(float) * 100); // P
+    S_min = (float *) malloc(sizeof(float) * 100); // T
+    speed = (int *) malloc(sizeof(int) * 100);
 
     while (run_flag) {
-	 
+
+	/* 
 	clear_buffer(ax, 0.0f, SAMPLES);
+	clear_buffer(ay, 0.0f, SAMPLES);
+	clear_buffer(az, 0.0f, SAMPLES);
+	clear_buffer(gx, 0.0f, SAMPLES);
+	clear_buffer(gy, 0.0f, SAMPLES);
+	clear_buffer(gz, 0.0f, SAMPLES);
+	*/
+
 	for (i = 0; i < SAMPLES; i++)
 	{
 		gettimeofday(&start, NULL);
@@ -92,24 +109,21 @@ int main()
 
 	//printf("Finding peaks and troughs...\n");
 
-    	P_i = (float *) malloc(sizeof(float) * SAMPLES);
-    	T_i = (float *) malloc(sizeof(float) * SAMPLES);
-	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, &n_P, &n_T);
+    	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, &n_P, &n_T);
 	
 	if (val < 0) {
 		fprintf(stderr, "find_peaks_and_throughs failed\n");
 		exit(EXIT_FAILURE);
 	}
 
-	S_i = (float *) malloc(sizeof(float) * n_P); // P
-	S_min = (float *) malloc(sizeof(float) * n_T); // T
-
 	n_S = detect_strides(ax, S_i, S_min, P_i, T_i, t, n_P, n_T);
 	
-	periods = (double *) malloc(sizeof(double) * n_S);
-    	min = (float *) malloc(sizeof(float) * n_S);
-    	max = (float *) malloc(sizeof(float) * n_S);
-	
+
+	if (n_S == 0)
+	{
+		printf("No strides detected...\n");
+	}
+
 	for (i = 0; i < n_S; i++) {
 		idx = (int) S_i[i];
 		idx_min = (int) S_min[i];
@@ -129,16 +143,20 @@ int main()
 	        input[2] = (float) min[j];
         	calc_out = fann_run(ann, input);
 
-	        for (i = 0; i < 4; i++) {
-         	   if (calc_out[i] > fmax) {
+	        for (i = 0; i < 4; i++) 
+		{
+         	   if (calc_out[i] > fmax) 
+		   {
                 	fmax = calc_out[i];
-	                speed = i+1;
+	                speed[j] = i+1;
         	    }
        		}
-		printf("Period: %f\t Max: %f\t Min: %f\t -> speed is %d\n", periods[j], max[j], min[j], speed);
-		sleep(1);
 	}
 
+	for (i = 0; i < n_S; i++)
+	{
+		printf("Period: %f\t Max: %f\t Min: %f\t -> speed is %d\n", periods[i], max[i], min[i], speed[i]);
+	}
     }
     fann_destroy(ann);
     return 0;
@@ -153,8 +171,8 @@ int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T
 
 //	printf("Clearing buffer...\n");
 
-	clear_buffer(P, 0.0f, SAMPLES);
-	clear_buffer(T, 0.0f, SAMPLES);
+	clear_buffer(P, 0.0f, 100);
+	clear_buffer(T, 0.0f, 100);
 
 	while (i != SAMPLES) {
 		i++;
@@ -211,9 +229,12 @@ int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T
 
 int detect_strides(float *arr, float *S_i, float *S_min, float *P_i, float *T_i, double *t, int n_P, int n_T)
 {
-  	int a, b, c, i, idx, n_S;
+  	clear_buffer(S_i, 0.0f, 100);
+	clear_buffer(S_min, 0.0f, 100);
+
+	int a, b, c, i, idx, n_S;
 	a = 0; b = 1; n_S = 0; c = 0; 
-	while( b < n_P)                     //P
+	while(b < n_P)                     //P
 	{
 		if((P_i[b] - P_i[a]) > 300)   //P
 		{
