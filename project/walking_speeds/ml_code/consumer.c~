@@ -1,18 +1,13 @@
 #include <unistd.h>
-
 #include <stdio.h>
 #include "floatfann.h"
-
 #include <string.h>
 #include <stdlib.h>
-
 #include <sys/time.h>
 #include <signal.h>
-#include <mraa/i2c.h>
-#include "LSM9DS0.h"
 
 #define MILLION 1000000.0
-#define SAMPLES 3000
+#define SAMPLES 500
 
 sig_atomic_t volatile run_flag = 1;
 
@@ -24,10 +19,12 @@ void do_when_interrupted(int sig)
 
 int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T, int *n_P, int *n_T);
 void clear_buffer(float *arr, float val, int n);
+void read_data(FILE *fp, double *t, float *ax, float *ay, float *az, float *gx, float *gy, float *gz, int samples);
 
 int main()
 {
-    int i, j, idx, idx_min, idx_next,  val;
+
+    int i, j, idx, idx_min, idx_next, val, sigma = 0, filenum = 0;
     int *speed;
     int n_S, n_P, n_T;
     fann_type *calc_out;
@@ -36,31 +33,16 @@ int main()
    
     ann = fann_create_from_file("TEST.net");
 	
-    mraa_i2c_context accel, gyro;
-    float *min, *max, fmax, a_res, g_res, threshold=1.7;
-    float ax[SAMPLES], ay[SAMPLES], az[SAMPLES], gx[SAMPLES], gy[SAMPLES], gz[SAMPLES];
+    float *min, *max, fmax, threshold=1.7;
+    float ax[SAMPLES+sigma], ay[SAMPLES+sigma], az[SAMPLES+sigma], gx[SAMPLES+sigma], gy[SAMPLES+sigma], gz[SAMPLES+sigma];
     float *P_i, *T_i, *S_i, *S_min;
-    double t[SAMPLES], start_epoch, end_epoch, *periods, period;
+    double t[SAMPLES+sigma], start_epoch, end_epoch, *periods, period;
     struct timeval start, end;
-    data_t accel_data, gyro_data;
-    accel_scale_t a_scale = A_SCALE_16G;
-    gyro_scale_t g_scale = G_SCALE_2000DPS;
-
-    accel = accel_init();
-    set_accel_scale(accel, a_scale);
-    set_accel_ODR(accel, A_ODR_1600);
-    gyro = gyro_init();
-    set_gyro_scale(gyro, g_scale);
-    set_gyro_ODR(gyro, G_ODR_760_BW_100);
-	
-    a_res = calc_accel_res(a_scale);
-    g_res = calc_gyro_res(g_scale);
-
 
     signal(SIGINT, do_when_interrupted);
     
-    P_i = (float *) malloc(sizeof(float) * SAMPLES);
-    T_i = (float *) malloc(sizeof(float) * SAMPLES);
+    P_i = (float *) malloc+(sizeof(float) * (SAMPLES+sigma));
+    T_i = (float *) malloc(sizeof(float) * (SAMPLES+sigma));
     periods = (double *) malloc(sizeof(double) * 100);
     min = (float *) malloc(sizeof(float) * 100);
     max = (float *) malloc(sizeof(float) * 100);
@@ -68,46 +50,33 @@ int main()
     S_min = (float *) malloc(sizeof(float) * 100); // T
     speed = (int *) malloc(sizeof(int) * 100);
 
-    while (run_flag) {
+    FILE *fp;
+    char filename[50];
 
-	/* 
-	clear_buffer(ax, 0.0f, SAMPLES);
-	clear_buffer(ay, 0.0f, SAMPLES);
-	clear_buffer(az, 0.0f, SAMPLES);
-	clear_buffer(gx, 0.0f, SAMPLES);
-	clear_buffer(gy, 0.0f, SAMPLES);
-	clear_buffer(gz, 0.0f, SAMPLES);
-	*/
+    sleep(1);
+
+    while (run_flag){
+	sprintf(filename, "data_%d.csv", filenum);
+	fp = fopen(filename, "r");
+
+	if (fp == NULL)
+	{
+		fprintf(stderr, "File %s could not be opened.\n", filename);
+		exit(EXIT_FAILURE);
+	}
+
+	printf("Reading data...\n");
+	read_data(fp, t, ax, ay, az, gx, gy, gz, SAMPLES+sigma);
+	
+	printf("Finding peaks and troughs...\n");
+
+	fclose(fp);
+	filenum++;
 
 	for (i = 0; i < SAMPLES; i++)
 	{
-		gettimeofday(&start, NULL);
-		start_epoch = start.tv_sec + start.tv_usec/MILLION;
-		
-		accel_data = read_accel(accel, a_res);
-		gyro_data = read_gyro(gyro, g_res);
-		
-		gettimeofday(&end, NULL);
-		end_epoch = end.tv_sec + end.tv_usec/MILLION;
-
-	
-		ax[i] = accel_data.x;
-		ay[i] = accel_data.y;
-		az[i] = accel_data.z;
-
-		gx[i] = gyro_data.x;
-		gy[i] = gyro_data.y;
-		gz[i] = gyro_data.z;
-	
-		t[i] = (start_epoch + end_epoch)/2.0;
-
-		//printf("i: %d\t t: %lf\t ax: %f\t ay: %f\t az: %f\t gx: %f\t gy: %f\t gz: %f\n", i, t[i], ax[i], ay[i], az[i], gx[i], gy[i], gz[i]);
-		
-		usleep(99);
+		printf("%lf, %f, %f, %f, %f, %f, %f\n", t[i], ax[i], ay[i], az[i], gx[i], gy[i], gz[i]);
 	}
-	
-
-	//printf("Finding peaks and troughs...\n");
 
     	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, &n_P, &n_T);
 	
@@ -116,7 +85,7 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
-	n_S = detect_strides(ax, S_i, S_min, P_i, T_i, t, n_P, n_T);
+	n_S = detect_strides(S_i, S_min, P_i, T_i, t, n_P, n_T);
 	
 
 	if (n_S == 0)
@@ -227,7 +196,7 @@ int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T
 	return 0;
 }
 
-int detect_strides(float *arr, float *S_i, float *S_min, float *P_i, float *T_i, double *t, int n_P, int n_T)
+int detect_strides(float *S_i, float *S_min, float *P_i, float *T_i, double *t, int n_P, int n_T)
 {
   	clear_buffer(S_i, 0.0f, 100);
 	clear_buffer(S_min, 0.0f, 100);
@@ -276,6 +245,17 @@ void clear_buffer(float *arr, float val, int n)
 		arr[i] = val;
 }
 
+void read_data(FILE *fp, double *t, float *ax, float *ay, float *az, float *gx, float *gy, float *gz, int samples)
+{
+	int i;
+	for(i = 0; i < samples; i++)
+	{
+		fscanf(fp, "%[^lf,], %[^f,], %[^f,], %[^f,], %[^f,], %[^f,], %f", t[i], ax[i], ay[i], az[i], gx[i], gy[i], gz[i]);
+	}
+	
+	return;	
+
+}
 float calculate_mean(float *arr, int n)
 {
 	float total;

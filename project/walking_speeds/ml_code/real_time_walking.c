@@ -12,7 +12,7 @@
 #include "LSM9DS0.h"
 
 #define MILLION 1000000.0
-#define SAMPLES 3000
+#define SAMPLES 1000
 
 sig_atomic_t volatile run_flag = 1;
 
@@ -27,7 +27,8 @@ void clear_buffer(float *arr, float val, int n);
 
 int main()
 {
-    int i, j, idx, idx_min, idx_next,  val;
+
+    int i, j, idx, idx_min, idx_next, val, sigma = 100, delta;
     int *speed;
     int n_S, n_P, n_T;
     fann_type *calc_out;
@@ -38,9 +39,9 @@ int main()
 	
     mraa_i2c_context accel, gyro;
     float *min, *max, fmax, a_res, g_res, threshold=1.7;
-    float ax[SAMPLES], ay[SAMPLES], az[SAMPLES], gx[SAMPLES], gy[SAMPLES], gz[SAMPLES];
+    float ax[SAMPLES+sigma], ay[SAMPLES+sigma], az[SAMPLES+sigma], gx[SAMPLES+sigma], gy[SAMPLES+sigma], gz[SAMPLES+sigma];
     float *P_i, *T_i, *S_i, *S_min;
-    double t[SAMPLES], start_epoch, end_epoch, *periods, period;
+    double t[SAMPLES+sigma], start_epoch, end_epoch, *periods, period;
     struct timeval start, end;
     data_t accel_data, gyro_data;
     accel_scale_t a_scale = A_SCALE_16G;
@@ -56,17 +57,29 @@ int main()
     a_res = calc_accel_res(a_scale);
     g_res = calc_gyro_res(g_scale);
 
-
     signal(SIGINT, do_when_interrupted);
     
-    P_i = (float *) malloc(sizeof(float) * SAMPLES);
-    T_i = (float *) malloc(sizeof(float) * SAMPLES);
+    P_i = (float *) malloc+(sizeof(float) * (SAMPLES+sigma));
+    T_i = (float *) malloc(sizeof(float) * (SAMPLES+Sigma));
     periods = (double *) malloc(sizeof(double) * 100);
     min = (float *) malloc(sizeof(float) * 100);
     max = (float *) malloc(sizeof(float) * 100);
     S_i = (float *) malloc(sizeof(float) * 100); // P
     S_min = (float *) malloc(sizeof(float) * 100); // T
     speed = (int *) malloc(sizeof(int) * 100);
+
+    for (i = 0; i < sigma; i++)
+    {
+	    t[i] = 0.0f;
+	    ax[i] = 0.0f;
+	    ay[i] = 0.0f;
+	    az[i] = 0.0f;
+	    gx[i] = 0.0f;
+	    gy[i] = 0.0f;
+	    gz[i] = 0.0f;
+    }
+
+    delta = sigma;
 
     while (run_flag) {
 
@@ -91,15 +104,15 @@ int main()
 		end_epoch = end.tv_sec + end.tv_usec/MILLION;
 
 	
-		ax[i] = accel_data.x;
-		ay[i] = accel_data.y;
-		az[i] = accel_data.z;
+		ax[i+delta] = accel_data.x;
+		ay[i+delta] = accel_data.y;
+		az[i+delta] = accel_data.z;
 
-		gx[i] = gyro_data.x;
-		gy[i] = gyro_data.y;
-		gz[i] = gyro_data.z;
+		gx[i+delta] = gyro_data.x;
+		gy[i+delta] = gyro_data.y;
+		gz[i+delta] = gyro_data.z;
 	
-		t[i] = (start_epoch + end_epoch)/2.0;
+		t[i+delta] = (start_epoch + end_epoch)/2.0;
 
 		//printf("i: %d\t t: %lf\t ax: %f\t ay: %f\t az: %f\t gx: %f\t gy: %f\t gz: %f\n", i, t[i], ax[i], ay[i], az[i], gx[i], gy[i], gz[i]);
 		
@@ -116,7 +129,7 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
-	n_S = detect_strides(ax, S_i, S_min, P_i, T_i, t, n_P, n_T);
+	n_S = detect_strides(S_i, S_min, P_i, T_i, t, n_P, n_T);
 	
 
 	if (n_S == 0)
@@ -132,6 +145,11 @@ int main()
 		periods[i] = period/10.0;
 		max[i] = ax[idx]/10.0;
 		min[i] = ax[idx_min]/10.0;
+	}
+
+	for (i = 0; i < sigma; i++)
+	{
+		
 	}
 
 	//determine walking speed for each stride
@@ -227,7 +245,7 @@ int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T
 	return 0;
 }
 
-int detect_strides(float *arr, float *S_i, float *S_min, float *P_i, float *T_i, double *t, int n_P, int n_T)
+int detect_strides(float *S_i, float *S_min, float *P_i, float *T_i, double *t, int n_P, int n_T)
 {
   	clear_buffer(S_i, 0.0f, 100);
 	clear_buffer(S_min, 0.0f, 100);
@@ -267,6 +285,17 @@ int detect_strides(float *arr, float *S_i, float *S_min, float *P_i, float *T_i,
 	}
 
 	return n_S;
+}
+
+void adjust_window(float *arr, int sigma)
+{
+	int i;
+	for(i = 0; i < sigma; i++)
+	{
+		arr[i] = arr[SAMPLES - sigma + i];
+	}
+
+	return 0;	
 }
 
 void clear_buffer(float *arr, float val, int n)
