@@ -50,7 +50,7 @@ int main()
 
     while (run_flag) {
 
-	sprintf(filename, "data_%d.csv", filenum);
+	sprintf(filename, "data_%d.txt", filenum);
     	fp = fopen(filename, "w");
 	
 	if (fp == NULL)

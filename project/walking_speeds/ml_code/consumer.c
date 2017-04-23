@@ -24,7 +24,7 @@ void read_data(FILE *fp, double *t, float *ax, float *ay, float *az, float *gx, 
 int main()
 {
 
-    int i, j, idx, idx_min, idx_next, val, sigma = 0, filenum = 0;
+    int i, j, idx, idx_min, idx_next, val, rv, sigma = 0, filenum = 0;
     int *speed;
     int n_S, n_P, n_T;
     fann_type *calc_out;
@@ -51,12 +51,15 @@ int main()
     speed = (int *) malloc(sizeof(int) * 100);
 
     FILE *fp;
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
     char filename[50];
 
     sleep(1);
 
     while (run_flag){
-	sprintf(filename, "data_%d.csv", filenum);
+	sprintf(filename, "data_%d.txt", filenum);
 	fp = fopen(filename, "r");
 
 	if (fp == NULL)
@@ -66,17 +69,18 @@ int main()
 	}
 
 	printf("Reading data...\n");
-	read_data(fp, t, ax, ay, az, gx, gy, gz, SAMPLES+sigma);
-	
+	//read_data(fp, t, ax, ay, az, gx, gy, gz, SAMPLES+sigma);
+	i = 0;
+	while ((read = getline(&line, &len, fp)) != -1)
+	{
+		rv = sscanf(line, "%lf,%f,%f,%f,%f,%f,%f\n", &t[i], &ax[i], &ay[i], &az[i], &gx[i], &gy[i], &gz[i]);
+		i++;
+	}
+
 	printf("Finding peaks and troughs...\n");
 
 	fclose(fp);
 	filenum++;
-
-	for (i = 0; i < SAMPLES; i++)
-	{
-		printf("%lf, %f, %f, %f, %f, %f, %f\n", t[i], ax[i], ay[i], az[i], gx[i], gy[i], gz[i]);
-	}
 
     	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, &n_P, &n_T);
 	
@@ -247,10 +251,21 @@ void clear_buffer(float *arr, float val, int n)
 
 void read_data(FILE *fp, double *t, float *ax, float *ay, float *az, float *gx, float *gy, float *gz, int samples)
 {
-	int i;
-	for(i = 0; i < samples; i++)
+	int i, r;
+	size_t len;
+	ssize_t read;
+	char *line = NULL;
+	while(read = getline(&line, &len, fp) != -1)
 	{
-		fscanf(fp, "%[^lf,], %[^f,], %[^f,], %[^f,], %[^f,], %[^f,], %f", t[i], ax[i], ay[i], az[i], gx[i], gy[i], gz[i]);
+		printf("test1\n");
+		r = sscanf(line, "%lf,%f,%f,%f,%f,%f,%f\n", &t[i], &ax[i], &ay[i], &az[i], &gx[i], &gy[i], &gz[i]);
+		printf("test2\n");
+		/*if (r == EOF)
+		{
+			fprintf(stderr, "Error reading file...\n");
+			exit(EXIT_FAILURE);
+		}*/
+
 	}
 	
 	return;	

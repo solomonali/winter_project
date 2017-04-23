@@ -59,7 +59,7 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
-	printf("Filenum: %d, Filename: %s\n", filenum, filename);
+	//printf("Filenum: %d, Filename: %s\n", filenum, filename);
 
 	for (i = 0; i < SAMPLES; i++)
 	{
@@ -76,10 +76,10 @@ int main()
 
 		fprintf(fp, "%lf,%f,%f,%f,%f,%f,%f\n", t, accel_data.x, accel_data.y, accel_data.z, gyro_data.x, gyro_data.y, gyro_data.z);
 		
-	//	usleep(99);
+		usleep(99);
 	}
 
-	printf("Next window\n");
+	//printf("Next window\n");
 	filenum++;
 	fclose(fp);
     }
