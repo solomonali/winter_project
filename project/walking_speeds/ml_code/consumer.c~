@@ -13,6 +13,8 @@ sig_atomic_t volatile run_flag = 1;
 
 void do_when_interrupted(int sig)
 {
+	system("rm -f data_*");
+
 	if (sig == SIGINT)
 		run_flag = 0;
 }
@@ -56,20 +58,15 @@ int main()
     ssize_t read;
     char filename[50];
 
-    sleep(1);
-
     while (run_flag){
-	sprintf(filename, "data_%d.txt", filenum);
-	fp = fopen(filename, "r");
+	fp = NULL;
 
-	if (fp == NULL)
+	sprintf(filename, "data_%d.txt", filenum);
+	while (fp == NULL)
 	{
-		fprintf(stderr, "File %s could not be opened.\n", filename);
-		exit(EXIT_FAILURE);
+		fp = fopen(filename, "r");
 	}
 
-	printf("Reading data...\n");
-	//read_data(fp, t, ax, ay, az, gx, gy, gz, SAMPLES+sigma);
 	i = 0;
 	while ((read = getline(&line, &len, fp)) != -1)
 	{
@@ -77,15 +74,8 @@ int main()
 		i++;
 	}
 
-	printf("Finding peaks and troughs...\n");
-
 	fclose(fp);
 	filenum++;
-
-	for (i = 0; i < SAMPLES; i++)
-	{
-		printf("%lf, %f, %f, %f, %f, %f, %f\n", t[i], ax[i], ay[i], az[i], gx[i], gy[i], gz[i]);
-	}
 
     	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, &n_P, &n_T);
 	
@@ -101,41 +91,43 @@ int main()
 	{
 		printf("No strides detected...\n");
 	}
-
-	for (i = 0; i < n_S; i++) {
-		idx = (int) S_i[i];
-		idx_min = (int) S_min[i];
-		idx_next = (int) S_i[i+1];
-		((i+1)!=n_S)? period = t[idx_next]- t[idx]: period;
-		periods[i] = period/10.0;
-		max[i] = ax[idx]/10.0;
-		min[i] = ax[idx_min]/10.0;
-	}
-
-	//determine walking speed for each stride
-	for (j = 0; j < n_S; j++)
+	else
 	{
-		fmax = -100;   
-	        input[0] = (float) periods[j];
-        	input[1] = (float) max[j];
-	        input[2] = (float) min[j];
-        	calc_out = fann_run(ann, input);
-
-	        for (i = 0; i < 4; i++) 
+		for (i = 0; i < n_S; i++) 
 		{
-         	   if (calc_out[i] > fmax) 
-		   {
-                	fmax = calc_out[i];
-	                speed[j] = i+1;
-        	    }
-       		}
-	}
+			idx = (int) S_i[i];
+			idx_min = (int) S_min[i];
+			idx_next = (int) S_i[i+1];
+			((i+1)!=n_S)? period = t[idx_next]- t[idx]: period;
+			periods[i] = period/10.0;
+			max[i] = ax[idx]/10.0;
+			min[i] = ax[idx_min]/10.0;
+		}
 
-	for (i = 0; i < n_S; i++)
-	{
-		printf("Period: %f\t Max: %f\t Min: %f\t -> speed is %d\n", periods[i], max[i], min[i], speed[i]);
+		//determine walking speed for each stride
+		for (j = 0; j < n_S; j++)
+		{
+			fmax = -100;   
+		        input[0] = (float) periods[j];
+        		input[1] = (float) max[j];
+	        	input[2] = (float) min[j];
+	        	calc_out = fann_run(ann, input);
+	
+		        for (i = 0; i < 4; i++) 
+			{
+	         	   if (calc_out[i] > fmax) 
+			   {
+                		fmax = calc_out[i];
+	                	speed[j] = i+1;
+	        	    }
+       			}
+		}
+
+		for (i = 0; i < n_S; i++)
+		{
+			printf("Period: %f\t Max: %f\t Min: %f\t -> speed is %d\n", periods[i], max[i], min[i], speed[i]);
+		}
 	}
-    }
     fann_destroy(ann);
     return 0;
 }
