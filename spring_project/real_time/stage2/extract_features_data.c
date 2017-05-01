@@ -1,0 +1,479 @@
+/* for file and terminal I/O */
+#include <stdio.h>
+/* for string manip */
+#include <string.h>
+/* for exit() */
+#include <stdlib.h>
+/* for fabsf() */
+#include <math.h>
+
+#include <stdlib.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/file.h>
+#include "floatfann.h"
+#include <string.h>
+
+#define BUFF_SIZE 1024
+
+void clear_buffer(float *arr, float val, int n); 
+float calculate_mean(float *arr, int start, int end);
+void calculate_Max_Min_Range(float *arr,int start,int end,
+		float *max, float *min, float *range);
+void calculate_Statistics (float *arr, int start, int end, float mean, 
+		float *MAD, float *variance, float *std,
+		float *skewness, float *kurtosis);
+int find_peaks_and_troughs(float *arr,int n_samples,float E,float *P, float *T,
+		 	int *n_P, int *n_T);
+int stride_extraction(int ind_thr,int n_P, float *P_i,float *T_i,
+		 float *S_imax, float *S_imin);
+void featureExtraction(int n_S,float *S_imax,float **features,float *axis);
+
+sig_atomic_t volatile run_flag = 1;
+
+void do_when_interrupted(int sig)
+{
+	if(sig == SIGINT)
+		run_flag = 0;
+}
+
+int main()
+{
+	/* Generic variables */
+	int i,k,j,ind_thr,rv;
+	/* Variables for reading file line by line */
+	char ifile_name[100];
+	FILE *fp;
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read;
+	int N_SAMPLES;
+
+
+	/* Variables for storing the data and storing the return values */
+	double *t,*t_b, *t_a; 
+	/* variables for data collected from input file */
+	float *x_ac, *y_ac, *z_ac, *x_gy, *y_gy, *z_gy; 	
+	float pk_threshold = 100.00;	// pk-threshold value
+       	/* Variables for peak-trough detection */	
+	float *P_i; 	// indicies of each peak found by peak detection
+	float *T_i; 	// indicies of each trough found by trough detection
+	float *S_imax,*S_imin; 	// indicies of the start of each stride
+	int n_P; 	// number of peaks
+	int n_T; 	// number of troughs
+	int n_S = 0; 	// number of strides
+
+	char number[10];
+	int icntr = 0;
+	char ifile[10] = "file";
+	char iextension[10] = ".csv";
+	int fd;
+	/* open the input file */   
+       	int axes, nfeatures,speed,nOutputs;
+  
+       	axes = 1;
+	nfeatures = 9;
+	nOutputs = 3;
+  	float max;
+    	fann_type *calc_out;
+    	fann_type input[nfeatures];
+    	struct fann *ann;
+    	ann = fann_create_from_file("./stage3/TEST.net");
+
+    
+	while(1)
+	{
+		signal(SIGINT, &do_when_interrupted);
+		if(!run_flag){ break;}
+		if(icntr==10){icntr=0;}
+		sprintf(number,"%d",icntr);
+		strcpy(ifile_name,ifile);
+		strcat(ifile_name,number);
+		strcat(ifile_name,iextension);
+		fp = fopen(ifile_name, "r");
+		if (fp==NULL) {	
+			fprintf(stderr, "Failed to open file \'%s\'. Exiting.\n"
+					,ifile_name);
+			exit(EXIT_FAILURE);
+		}
+		fd = fileno(fp);
+		flock(fd,LOCK_EX);
+		//printf("Attempting to read from file \'%s\'.\n", ifile_name);
+
+		/* count the number of lines in the file */
+		read = getline(&line, &len, fp); //discard header of file
+		N_SAMPLES = 0;
+		while ((read = getline(&line, &len, fp)) != -1) {
+			N_SAMPLES++;
+		}
+	
+		/* go back to the start of the file so that the data can be read */
+		rewind(fp);
+		read = getline(&line, &len, fp); //discard header of file
+
+		/* start reading the data from the file into the data structures */
+		i = 0;
+		t =   (double *) malloc(sizeof(double) * N_SAMPLES);
+		t_b = (double *) malloc(sizeof(double) * N_SAMPLES);
+		t_a = (double *) malloc(sizeof(double) * N_SAMPLES);
+		x_ac = (float *) malloc(sizeof(float) * N_SAMPLES);
+		y_ac = (float *) malloc(sizeof(float) * N_SAMPLES);
+		z_ac = (float *) malloc(sizeof(float) * N_SAMPLES);
+		x_gy = (float *) malloc(sizeof(float) * N_SAMPLES);
+		y_gy = (float *) malloc(sizeof(float) * N_SAMPLES);
+		z_gy = (float *) malloc(sizeof(float) * N_SAMPLES);
+	
+		while ((read = getline(&line, &len, fp)) != -1) {
+			/* parse the data */
+			rv = sscanf(line, "%lf,%lf,%f,%f,%f,%f,%f,%f\n",
+			&t_b[i],&t_a[i],&x_ac[i],&y_ac[i],&z_ac[i],&x_gy[i],
+		       	&y_gy[i], &z_gy[i]);
+			if (rv != 8) {
+				fprintf(stderr,
+						"%s %d \'%s\'. %s.\n",
+						"Failed to read line",
+						i,
+						line,
+						"Exiting"
+				       );
+				exit(EXIT_FAILURE);
+			}
+			i++;
+		}
+		fclose(fp);	
+		remove(ifile_name); 
+
+		int ii;
+		for ( ii = 0; ii < N_SAMPLES; ii++)
+		{
+			t[ii] = (t_b[ii] + t_a[ii])/2.0;
+	
+		}
+	
+		/* 
+		 * From selected thresholds, 
+		 * find indicies of peaks
+		 * find indicies of troughs
+		 */
+	
+		ind_thr	= 300;
+		P_i = (float *) malloc(sizeof(float) * N_SAMPLES);
+		T_i = (float *) malloc(sizeof(float) * N_SAMPLES);
+		rv = find_peaks_and_troughs(z_gy,N_SAMPLES,pk_threshold,P_i, 
+				T_i, &n_P, &n_T);
+		if (rv < 0) {
+			fprintf(stderr, "find_peaks_and_troughs failed\n");
+			exit(EXIT_FAILURE);
+		}
+
+		S_imax = (float *) malloc(sizeof(float) * n_P); // P
+		S_imin = (float *) malloc(sizeof(float) * n_T); //T 
+
+	        n_S = stride_extraction(ind_thr,n_P,P_i,T_i,S_imax,S_imin);	
+
+		/*extracting features*/
+
+		/*x_ac*/
+/*		float mean_xac[n_S],max_xac[n_S],min_xac[n_S],range_xac[n_S],
+		      MAD_xac[n_S],variance_xac[n_S],std_xac[n_S],
+		      skewness_xac[n_S],kurtosis_xac[n_S];
+		float *features_xac[] = {mean_xac,max_xac,min_xac,range_xac,
+			MAD_xac,variance_xac,std_xac,skewness_xac,kurtosis_xac};	
+		featureExtraction(n_S,S_imax,features_xac,x_ac);
+*/	
+		/*y_ac*/
+/*		float mean_yac[n_S],max_yac[n_S],min_yac[n_S],range_yac[n_S],
+		      MAD_yac[n_S],variance_yac[n_S],std_yac[n_S],
+		      skewness_yac[n_S],kurtosis_yac[n_S];
+		float *features_yac[] = {mean_yac,max_yac,min_yac,range_yac,
+			MAD_yac,variance_yac,std_yac,skewness_yac,kurtosis_yac};	
+		featureExtraction(n_S,S_imax,features_yac,y_ac);
+*/
+		/*z_ac*/
+/*		float mean_zac[n_S],max_zac[n_S],min_zac[n_S],range_zac[n_S],
+		      MAD_zac[n_S],variance_zac[n_S],std_zac[n_S],
+		      skewness_zac[n_S],kurtosis_zac[n_S];
+		float *features_zac[] = {mean_zac,max_zac,min_zac,range_zac,
+			MAD_zac,variance_zac,std_zac,skewness_zac,kurtosis_zac};	
+		featureExtraction(n_S,S_imax,features_zac,z_ac);
+*/
+		/*x_gy*/
+/*		float mean_xgy[n_S],max_xgy[n_S],min_xgy[n_S],range_xgy[n_S],
+		      MAD_xgy[n_S],variance_xgy[n_S],std_xgy[n_S],
+		      skewness_xgy[n_S],kurtosis_xgy[n_S];
+		float *features_xgy[] = {mean_xgy,max_xgy,min_xgy,range_xgy,
+			MAD_xgy,variance_xgy,std_xgy,skewness_xgy,kurtosis_xgy};	
+		featureExtraction(n_S,S_imax,features_xgy,x_gy);
+*/
+		/*y_gy*/
+/*		float mean_ygy[n_S],max_ygy[n_S],min_ygy[n_S],range_ygy[n_S],
+		      MAD_ygy[n_S],variance_ygy[n_S],std_ygy[n_S],
+		      skewness_ygy[n_S],kurtosis_ygy[n_S];
+		float *features_ygy[] = {mean_ygy,max_ygy,min_ygy,range_ygy,
+			MAD_ygy,variance_ygy,std_ygy,skewness_ygy,kurtosis_ygy};	
+		featureExtraction(n_S,S_imax,features_ygy,y_gy);
+*/
+		/*z_gy*/
+		float mean_zgy[n_S],max_zgy[n_S],min_zgy[n_S],range_zgy[n_S],
+		      MAD_zgy[n_S],variance_zgy[n_S],std_zgy[n_S],
+		      skewness_zgy[n_S],kurtosis_zgy[n_S];
+		float *features_zgy[] = {mean_zgy,max_zgy,min_zgy,range_zgy,
+			MAD_zgy,variance_zgy,std_zgy,skewness_zgy,kurtosis_zgy};	
+		featureExtraction(n_S,S_imax,features_zgy,z_gy);
+	
+		float **features[]={features_zgy};
+
+		if (n_S==0)
+		{
+			printf("standing\n");
+		}	
+		for (i = 0; i < (n_S); i++) {
+			for(k=0;k<axes;k++)
+			{
+				for(j=0;j<nfeatures;j++)
+				{
+					if(axes<3){
+						input[j]=
+						(float)features[k][j][i]/50;}
+					else{
+						input[j]=
+						(float)features[k][j][i]/5000;}		
+				}
+			}	
+			calc_out = fann_run(ann, input);
+
+       			max = -100;
+		        for (ii = 0; ii < nOutputs; ii++) {
+        		    if (calc_out[ii] > max) {
+	               		max = calc_out[ii];
+        	       	 	speed = ii+1;
+	            	    }
+       		 	}	
+
+			printf("speed is %d\n", speed);
+		
+		}
+		icntr++;
+	}
+
+		 
+	printf("extract_stride_data completed successfuly. Exiting.\n");
+   	fann_destroy(ann);
+	return 0;
+}
+
+////////////////////////////
+
+void featureExtraction(int n_S,float *S_imax,float **features,float *axis)
+{	
+	float *mean,*max,*min,*range,*MAD,*variance,
+	      *std,*skewness,*kurtosis;
+        mean = features[0];           max = features[1];
+	min = features[2];            range = features[3];
+	MAD = features[4];            variance = features[5];
+	std = features[6];            skewness = features[7];
+	kurtosis = features[8];
+
+	int start,end;
+	int k, offset;
+	for(k=0;k<n_S;k++)
+	{
+		if((k+1)!=n_S){	offset = (S_imax[k+1]-S_imax[k])/2;}
+		else{ offset = 200;}
+
+		start = S_imax[k]-offset; //shift from the pick to the valley
+		end = S_imax[k]+offset;
+		mean[k] = calculate_mean(axis,start,end);
+        	calculate_Max_Min_Range(axis,start,end,(max+k),(min+k),
+				(range+k));
+        	calculate_Statistics (axis,start,end,mean[k],(MAD+k),
+				(variance+k),(std+k),(skewness+k),(kurtosis+k));
+	}
+
+}
+
+
+void clear_buffer(float *arr, float val, int n) 
+{
+	int i;
+	for (i = 0; i < n; i++) {
+		arr[i] = val;
+	}
+}
+
+/*
+ * Caculates mean of first <n> samples in <*arr>
+ */
+float calculate_mean(float *arr, int start, int end)
+{
+	float total=0;
+	int i, n;
+
+	n = end - start;
+	total = 0.0f;
+	for (i = 0; i < n; i++) {
+		total += arr[start + i];
+	}
+
+	return total/((float) n);
+}
+
+void calculate_Max_Min_Range(float *arr,int start,int end,
+		float *max, float *min, float *range)
+{
+	int i, n;
+
+	n = end - start;
+	*max = arr[start];
+	*min = arr[start];
+	
+	for (i = 0; i < n; i++) {
+		if(arr[start+i]> *max)
+		{
+			*max = arr[start+i];
+		}
+		if(arr[start+i]< *min)
+		{
+			*min = arr[start+i];
+		}
+	}
+	*range = (*max-*min);
+}
+
+void calculate_Statistics (float *arr, int start, int end, float mean, 
+		float *MAD, float *variance, float *std,
+		float *skewness, float *kurtosis)
+{	
+	float total1, total2, total3, total4, holder; 
+	total1 = 0.0f;	total2 = 0.0f; total3 = 0.0f;
+	total4 = 0.0f;  holder = 0.0f;
+	int n = end - start;
+	int i;
+	for (i = 0; i < n; i++) {
+		holder = arr[start + i]-mean;
+		total1 += abs(holder);
+		total2 += holder*holder;
+		total3 += holder*holder*holder;
+		total4 += holder*holder*holder*holder;	
+	}
+
+	*MAD = total1/((float) n);
+	*variance = total2/((float) n);
+	*std = sqrt(*variance);
+	holder = *std;
+	*skewness = (total3/((float) n))/(holder*holder*holder);
+	*kurtosis = (total4/((float) n))/(holder*holder*holder*holder);
+}
+
+
+int find_peaks_and_troughs(
+		float *arr, 	// signal 
+		int n_samples, 	// number of samples present in the signal
+		float E, 	// threshold for peak detection
+		// arrays that will store the indicies of the located
+		// peaks and troughs
+		float *P, float *T,
+		// number of peaks (n_P) and number of troughs (n_T)
+		// found in the data set *arr
+		int *n_P, int *n_T
+		)
+{
+	int a, b, i, d, _n_P, _n_T;
+
+	i = -1; d = 0; a = 0; b = 0;
+	_n_P = 0; _n_T = 0;
+
+	clear_buffer(P, 0.0f, n_samples);
+	clear_buffer(T, 0.0f, n_samples);
+
+	while (i != n_samples) {
+		i++;
+		if (d == 0) {
+			if (arr[a] >= (arr[i] + E)) {
+				d = 2;
+			} else if (arr[i] >= (arr[b] + E)) {
+				d = 1;
+			}
+			if (arr[a] <= arr[i]) {
+				a = i;
+			} else if (arr[i] <= arr[b]) {
+				b = i;
+			}
+		} else if (d == 1) {
+			if (arr[a] <= arr[i]) {
+				a = i;
+			} else if (arr[a] >= (arr[i] + E)) {
+				/*
+				 * Peak has been detected.
+				 * Add index at detected peak
+				 * to array of peak indicies
+				 * increment count of peak indicies
+				 */
+				P[_n_P] = a;
+				_n_P++;
+				b = i;
+				d = 2;
+			}
+		} else if (d == 2) {
+			if (arr[i] <= arr[b]) {
+				b = i;
+			} else if (arr[i] >= (arr[b] + E)) {
+				/*
+				 * Trough has been detected.
+				 * Add index at detected trough
+				 * to array of trough indicies
+				 * increment count of trough indicies
+				 */
+				T[_n_T] = b;
+				_n_T++;
+				a = i;
+				d = 1;
+			}
+		}
+	}
+
+	(*n_P) = _n_P;
+	(*n_T) = _n_T;
+	return 0;
+}
+
+int stride_extraction(int ind_thr,int n_P, float *P_i,float *T_i,
+		 float *S_imax, float *S_imin)
+{
+	int a , b , c, n_S;
+	a = 0; b = 1; n_S = 0; c = 0; 
+	while( b < n_P)                     //P
+	{
+		if((P_i[b] - P_i[a]) > ind_thr)   //P
+		{
+			S_imax[n_S] = P_i[a];         //P
+		        S_imin[n_S] = T_i[a];	  // T
+			n_S++;
+			a=a+c+1;              
+			b=b+1;
+			c=0;
+			/*checking for boundary conditions: if the last stride*/ 
+			if((b == n_P) && ((P_i[b-1] - P_i[a-1])>300)) //P
+		        {
+				S_imax[n_S] = P_i[b-1];	//P
+				S_imin[n_S] = T_i[b-1];  //T
+				n_S++;
+			}	
+		}
+		else{
+			b++;
+			c++;
+                        /*checking for boundary conditions: if the last stride*/
+			if((b == n_P) && ((P_i[a] - P_i[a-1])>300))  //P
+			{		
+				S_imax[n_S] = P_i[a];   //P
+                        	S_imin[n_S] = T_i[a];  //T
+				n_S++;
+			}	
+		}
+	
+	}
+	return n_S;
+}
+
+
