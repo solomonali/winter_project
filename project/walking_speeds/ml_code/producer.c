@@ -8,7 +8,7 @@
 #include "LSM9DS0.h"
 
 #define MILLION 1000000.0
-#define SAMPLES 500
+#define SAMPLES 1500
 
 sig_atomic_t volatile run_flag = 1;
 
