@@ -48,7 +48,7 @@ int main()
 
     signal(SIGINT, do_when_interrupted);
 
-    while (run_flag) {
+    while (1) {
 
 	sprintf(filename, "data_%d.txt", filenum);
     	fp = fopen(filename, "w");

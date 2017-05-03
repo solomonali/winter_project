@@ -13,7 +13,7 @@ sig_atomic_t volatile run_flag = 1;
 
 void do_when_interrupted(int sig)
 {
-	system("rm -f data_*");
+//	system("rm -f data_*");
 
 	if (sig == SIGINT)
 		run_flag = 0;
@@ -58,16 +58,19 @@ int main()
     ssize_t read;
     char filename[50];
 
-    while (run_flag){
+    while (1){
 	fp = NULL;
 
 	sprintf(filename, "data_%d.txt", filenum);
+	
 	while (fp == NULL)
 	{
 		fp = fopen(filename, "r");
 	}
 
 	i = 0;
+	//printf("Reading file...\n");
+
 	while ((read = getline(&line, &len, fp)) != -1)
 	{
 		rv = sscanf(line, "%lf,%f,%f,%f,%f,%f,%f\n", &t[i], &ax[i], &ay[i], &az[i], &gx[i], &gy[i], &gz[i]);
@@ -77,12 +80,16 @@ int main()
 	fclose(fp);
 	filenum++;
 
+	//printf("Finding peaks and troughs...\n");
     	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, &n_P, &n_T);
-	
+	//printf("Check...\n");
+
 	if (val < 0) {
 		fprintf(stderr, "find_peaks_and_throughs failed\n");
 		exit(EXIT_FAILURE);
 	}
+
+	//printf("Detecting strides...\n");
 
 	n_S = detect_strides(S_i, S_min, P_i, T_i, t, n_P, n_T);
 	
@@ -93,6 +100,7 @@ int main()
 	}
 	else
 	{
+		//printf("Extracting features...\n");
 		for (i = 0; i < n_S; i++) 
 		{
 			idx = (int) S_i[i];
@@ -105,6 +113,7 @@ int main()
 		}
 
 		//determine walking speed for each stride
+		//printf("Determining walking speeds...\n");
 		for (j = 0; j < n_S; j++)
 		{
 			fmax = -100;   
@@ -140,10 +149,7 @@ int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T
 	i = -1; d = 0; a = 0; b = 0;
 	_n_P = 0; _n_T = 0;
 
-	clear_buffer(P, 0.0f, 100);
-	clear_buffer(T, 0.0f, 100);
-
-	while (i != SAMPLES) {
+	while (i != n_samples) {
 		i++;
 		if (d == 0) {
 			if (arr[a] >= (arr[i] + E)) {
@@ -189,6 +195,7 @@ int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T
 		}
 	}
 	
+	//printf("Returning values...\n");
 	(*n_P) = _n_P;
 	(*n_T) = _n_T;
 	return 0;
@@ -196,9 +203,6 @@ int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T
 
 int detect_strides(float *S_i, float *S_min, float *P_i, float *T_i, double *t, int n_P, int n_T)
 {
-  	clear_buffer(S_i, 0.0f, 100);
-	clear_buffer(S_min, 0.0f, 100);
-
 	int a, b, c, i, idx, n_S;
 	a = 0; b = 1; n_S = 0; c = 0; 
 	while(b < n_P)                     //P

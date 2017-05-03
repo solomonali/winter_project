@@ -1,0 +1,21 @@
+#ifndef WALKING_H_
+#define WALKING_H_
+
+#include <unistd.h>
+#include <stdio.h>
+#include "floatfann.h"
+#include <string.h>
+#include <stdlib.h>
+#include <sys/time.h>
+#include <signal.h>
+
+int MILLION;
+int SAMPLES;
+
+void extract_walking(float *P_i, float *T_i, int n_S, int n_P, int n_T, float *periods, float *min, float *max);
+
+int detect_strides(float *S_i, float *S_min, float *P_i, float *T_i, double *t, int n_P, int n_T);
+
+void clear_buffer(float *arr, float val, int n);
+
+#endif // WALKING_H_
