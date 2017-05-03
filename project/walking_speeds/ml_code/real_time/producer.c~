@@ -27,8 +27,6 @@ int main()
     
     int i, filenum = 0, sigma = 0;
 	
-    int fd;
-
     mraa_i2c_context accel, gyro;
     float a_res, g_res;
     double t, start_epoch, end_epoch;
@@ -62,9 +60,6 @@ int main()
 	}
 
 	//printf("Filenum: %d, Filename: %s\n", filenum, filename);
-
-	fd = fileno(fp);
-	flock(fd, LOCK_EX);
 
 	for (i = 0; i < SAMPLES; i++)
 	{

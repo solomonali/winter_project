@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <signal.h>
+#include <sys/file.h>
 
 #define MILLION 1000000.0
 #define SAMPLES 1500
@@ -22,6 +23,7 @@ void do_when_interrupted(int sig)
 int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T, int *n_P, int *n_T);
 void clear_buffer(float *arr, float val, int n);
 void read_data(FILE *fp, double *t, float *ax, float *ay, float *az, float *gx, float *gy, float *gz, int samples);
+void walk_features(float *ax, double *t, float *S_i, float *S_min, int n_S, int n_P, int n_T, double *periods, float *min, float *max);
 
 int main()
 {
@@ -38,7 +40,7 @@ int main()
     float min[1000], max[1000], fmax, threshold=1.7;
     float ax[SAMPLES+sigma], ay[SAMPLES+sigma], az[SAMPLES+sigma], gx[SAMPLES+sigma], gy[SAMPLES+sigma], gz[SAMPLES+sigma];
     float P_i[1000], T_i[1000], S_i[1000], S_min[1000];
-    double t[SAMPLES+sigma], start_epoch, end_epoch, periods[1000], period;
+    double t[SAMPLES+sigma], start_epoch, end_epoch, periods[1000];
     struct timeval start, end;
 
     signal(SIGINT, do_when_interrupted);
@@ -53,6 +55,7 @@ int main()
     //speed = (int *) malloc(sizeof(int) * 100);
 
     FILE *fp;
+    int fd;
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
@@ -67,6 +70,9 @@ int main()
 	{
 		fp = fopen(filename, "r");
 	}
+
+	fd = fileno(fp);
+	flock(fd, LOCK_EX);	
 
 	i = 0;
 //	printf("Reading file...\n");
@@ -110,16 +116,8 @@ int main()
 	else
 	{
 //		printf("Extracting features...\n");
-		for (i = 0; i < n_S; i++) 
-		{
-			idx = (int) S_i[i];
-			idx_min = (int) S_min[i];
-			idx_next = (int) S_i[i+1];
-			((i+1)!=n_S)? period = t[idx_next]- t[idx]: period;
-			periods[i] = period/10.0;
-			max[i] = ax[idx]/10.0;
-			min[i] = ax[idx_min]/10.0;
-		}
+		
+		walk_features(ax, t, S_i, S_min, n_S, n_P, n_T, periods, min, max);
 
 		//determine walking speed for each stride
 //		printf("Determining walking speeds...\n");
@@ -285,4 +283,23 @@ void read_data(FILE *fp, double *t, float *ax, float *ay, float *az, float *gx, 
 	}
 	
 	return;	
+}
+
+void walk_features(float *ax, double *t, float *S_i, float *S_min, int n_S, int n_P, int n_T, double *periods, float *min, float *max)
+{
+	int i, idx, idx_next, idx_min;
+	double period;
+
+	for (i = 0; i < n_S; i++)
+	{
+		idx = (int) S_i[i];
+		idx_min = (int) S_min[i];
+		idx_next = (int) S_i[i+1];
+		((i+1)!=n_S)? period = t[idx_next]- t[idx]: period;
+		periods[i] = period/10.0;
+		max[i] = ax[idx]/10.0;
+		min[i] = ax[idx_min]/10.0;
+	}
+
+	return;
 }
