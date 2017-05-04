@@ -8,7 +8,7 @@
 #include <sys/file.h>
 
 #define MILLION 1000000.0
-#define SAMPLES 1500
+#define SAMPLES 1000
 
 sig_atomic_t volatile run_flag = 1;
 
@@ -20,144 +20,12 @@ void do_when_interrupted(int sig)
 		run_flag = 0;
 }
 
-int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T, int *n_P, int *n_T);
-void clear_buffer(float *arr, float val, int n);
-void read_data(FILE *fp, double *t, float *ax, float *ay, float *az, float *gx, float *gy, float *gz, int samples);
-void walk_features(float *ax, float *t, float *S_i, float *S_min, int n_S, int n_P, int n_T, float *periods, float *min, float *max);
-
-int main()
-{
-
-    int i, j, idx, idx_min, idx_next, val, rv, sigma = 0, filenum = 0;
-    int speed[100];
-    int n_S, n_P, n_T;
-    fann_type *calc_out;
-    fann_type input[3];
-    struct fann *ann;
-   
-    ann = fann_create_from_file("TEST.net");
-	
-    float min[1000], max[1000], fmax, threshold=1.7;
-    float ax[SAMPLES+sigma], ay[SAMPLES+sigma], az[SAMPLES+sigma], gx[SAMPLES+sigma], gy[SAMPLES+sigma], gz[SAMPLES+sigma];
-    float P_i[1000], T_i[1000], S_i[1000], S_min[1000];
-    double t[SAMPLES+sigma], start_epoch, end_epoch, periods[1000], period;
-    struct timeval start, end;
-
-    signal(SIGINT, do_when_interrupted);
-    
-    //P_i = (float *) malloc+(sizeof(float) * (100));
-    //T_i = (float *) malloc(sizeof(float) * (100));
-    //periods = (double *) malloc(sizeof(double) * 100);
-    //min = (float *) malloc(sizeof(float) * 100);
-    //max = (float *) malloc(sizeof(float) * 100);
-    //S_i = (float *) malloc(sizeof(float) * 100); // P
-    //S_min = (float *) malloc(sizeof(float) * 100); // T
-    //speed = (int *) malloc(sizeof(int) * 100);
-
-    FILE *fp;
-    int fd;
-    char *line = NULL;
-    size_t len = 0;
-    ssize_t read;
-    char filename[50];
-
-    while (1){
-	fp = NULL;
-
-	sprintf(filename, "data_%d.txt", filenum);
-	
-	while (fp == NULL)
-	{
-		fp = fopen(filename, "r");
-	}
-
-	fd = fileno(fp);
-	flock(fd, LOCK_EX);	
-
-	i = 0;
-//	printf("Reading file...\n");
-
-	while ((read = getline(&line, &len, fp)) != -1)
-	{
-		rv = sscanf(line, "%lf,%f,%f,%f,%f,%f,%f\n", &t[i], &ax[i], &ay[i], &az[i], &gx[i], &gy[i], &gz[i]);
-		i++;
-	}
-
-	fclose(fp);
-	filenum++;
-/*
-	printf("File read...\n");
-
-	printf("Checking data...\n");
-	for (j = 0; j < SAMPLES; j++)
-	{
-		printf("i: %d\t t: %lf\t ax: %f\t ay: %f\t az: %f\t gx: %f\t gy: %f\t gz: %f\n", j, t[j], ax[j], ay[j], az[j], gx[j], gy[j], gz[j]);
-	}
-
-	printf("Finding peaks and troughs...\n");
- */
-	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, &n_P, &n_T);
-//	printf("Check...\n");
-
-	if (val < 0) {
-		fprintf(stderr, "find_peaks_and_throughs failed\n");
-		exit(EXIT_FAILURE);
-	}
-
-//	printf("Detecting strides...\n");
-
-	n_S = detect_strides(S_i, S_min, P_i, T_i, t, n_P, n_T);
-	
-
-	if (n_S == 0)
-	{
-		printf("No strides detected...\n");
-	}
-	else
-	{
-//		printf("Extracting features...\n");
-		
-		walk_features(ax, t, S_i, S_min, n_S, n_P, n_T, periods, min, max);
-
-		//determine walking speed for each stride
-//		printf("Determining walking speeds...\n");
-		for (j = 0; j < n_S; j++)
-		{
-			fmax = -100;   
-		        input[0] = (float) periods[j];
-        		input[1] = (float) max[j];
-	        	input[2] = (float) min[j];
-	        	calc_out = fann_run(ann, input);
-	
-		        for (i = 0; i < 4; i++) 
-			{
-	         	   if (calc_out[i] > fmax) 
-			   {
-                		fmax = calc_out[i];
-	                	speed[j] = i+1;
-	        	    }
-       			}
-		}
-
-		for (i = 0; i < n_S; i++)
-		{
-			printf("Period: %f\t Max: %f\t Min: %f\t -> speed is %d\n", periods[i], max[i], min[i], speed[i]);
-		}
-	}
-    }
-    fann_destroy(ann);
-    return 0;
-}
-
 int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T, int *n_P, int *n_T)
 {
 	int a, b, i, d, _n_P, _n_T;
 
 	d = 0; a = 0; b = 0;
 	_n_P = 0; _n_T = 0;
-
-	clear_buffer(P, 0.0f, 1000);
-	clear_buffer(T, 0.0f, 1000);
 
 	i = -1;
 	
@@ -218,9 +86,6 @@ int detect_strides(float *S_i, float *S_min, float *P_i, float *T_i, double *t, 
 	int a, b, c, i, idx, n_S;
 	a = 0; b = 1; n_S = 0; c = 0; 
 	
-	clear_buffer(S_i, 0.0f, 1000);
-	clear_buffer(S_min, 0.0f, 1000);
-
 	while(b < n_P)                     //P
 	{
 		if((P_i[b] - P_i[a]) > 300)   //P
@@ -263,43 +128,167 @@ void clear_buffer(float *arr, float val, int n)
 		arr[i] = val;
 }
 
-void read_data(FILE *fp, double *t, float *ax, float *ay, float *az, float *gx, float *gy, float *gz, int samples)
-{
-	int i, r;
-	size_t len;
-	ssize_t read;
-	char *line = NULL;
-	while(read = getline(&line, &len, fp) != -1)
-	{
-//		printf("test1\n");
-		r = sscanf(line, "%lf,%f,%f,%f,%f,%f,%f\n", &t[i], &ax[i], &ay[i], &az[i], &gx[i], &gy[i], &gz[i]);
-//		printf("test2\n");
-		/*if (r == EOF)
-		{
-			fprintf(stderr, "Error reading file...\n");
-			exit(EXIT_FAILURE);
-		}*/
-
-	}
-	
-	return;	
-}
-
-void walk_features(float *ax, float *t, float *S_i, float *S_min, int n_S, int n_P, int n_T, float *periods, float *min, float *max)
+void walk_features(float *ax, double *t, float *S_i, float *S_min, int n_S, int n_P, int n_T, double *periods, float *min, float *max)
 {
 	int i, idx, idx_next, idx_min;
-	float period;
+	double period;
 
 	for (i = 0; i < n_S; i++)
 	{
 		idx = (int) S_i[i];
 		idx_min = (int) S_min[i];
 		idx_next = (int) S_i[i+1];
-		((i+1)!=n_S)? period = t[idx_next]- t[idx]: period;
+		//((i+1)!=n_S)? period = t[idx_next]- t[idx]: period;
+		period = t[idx_next] - t[idx];
 		periods[i] = period/10.0;
 		max[i] = ax[idx]/10.0;
 		min[i] = ax[idx_min]/10.0;
+//		printf("Period: %f\n", periods[i]);
+//		printf("Max: %f\n", max[i]);
+//		printf("Min: %f\n", min[i]);
+
 	}
 
 	return;
+}
+
+int main()
+{
+
+    int i, j, idx, idx_min, idx_next, val, rv, sigma = 0, filenum = 0;
+    int size = 150;
+    int speed[size];
+    int n_S, n_P, n_T;
+    fann_type *calc_out;
+    fann_type input[3];
+    struct fann *ann;
+   
+    ann = fann_create_from_file("TEST.net");
+	
+    float min[size], max[size], fmax, threshold=1.7;
+    float ax[SAMPLES+sigma], ay[SAMPLES+sigma], az[SAMPLES+sigma], gx[SAMPLES+sigma], gy[SAMPLES+sigma], gz[SAMPLES+sigma];
+    float P_i[size*5], T_i[size*5], S_i[size], S_min[size];
+    double t[SAMPLES+sigma], start_epoch, end_epoch, periods[size];
+    struct timeval start, end;
+
+    signal(SIGINT, do_when_interrupted);
+    
+    //P_i = (float *) malloc+(sizeof(float) * (100));
+    //T_i = (float *) malloc(sizeof(float) * (100));
+    //periods = (double *) malloc(sizeof(double) * 100);
+    //min = (float *) malloc(sizeof(float) * 100);
+    //max = (float *) malloc(sizeof(float) * 100);
+    //S_i = (float *) malloc(sizeof(float) * 100); // P
+    //S_min = (float *) malloc(sizeof(float) * 100); // T
+    //speed = (int *) malloc(sizeof(int) * 100);
+
+    FILE *fp;
+    int fd;
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+    char filename[50];
+
+    for (i = 0; i < size; i++)
+    {
+	    periods[i] = 0.0;
+	    speed[i] = 0;
+    }
+
+    sleep(2);
+
+    while (1){
+	clear_buffer(P_i, 0.0f, size*5);
+	clear_buffer(T_i, 0.0f, size*5);
+	clear_buffer(min, 0.0f, size);
+	clear_buffer(max, 0.0f, size);
+	clear_buffer(S_i, 0.0f, size);
+	clear_buffer(S_min, 0.0f, size);
+
+	fp = NULL;
+
+	sprintf(filename, "data_%d.txt", filenum);
+	
+	while (fp == NULL)
+	{
+		fp = fopen(filename, "r");
+	}
+
+	fd = fileno(fp);
+	flock(fd, LOCK_EX);	
+
+	i = 0;
+//	printf("Reading file...\n");
+
+	while ((read = getline(&line, &len, fp)) != -1)
+	{
+		rv = sscanf(line, "%lf,%f,%f,%f,%f,%f,%f\n", &t[i], &ax[i], &ay[i], &az[i], &gx[i], &gy[i], &gz[i]);
+		i++;
+	}
+
+	fclose(fp);
+	filenum++;
+	//printf("File read...\n");
+
+	//printf("Checking data...\n");
+
+//	printf("Finding peaks and troughs...\n");
+	val = find_peaks_and_troughs(ax, SAMPLES, threshold, P_i, T_i, &n_P, &n_T);
+//	printf("Check...\n");
+
+	if (val < 0) {
+		fprintf(stderr, "find_peaks_and_throughs failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+//	printf("Detecting strides...\n");
+
+//	printf("# of Peaks: %d\t # of Troughs: %d\n", n_P, n_T);
+
+	n_S = detect_strides(S_i, S_min, P_i, T_i, t, n_P, n_T);
+	
+
+	if (n_S == 0)
+	{
+		printf("No strides detected...\n");
+		printf("Next set...\n");
+	}
+	else
+	{
+//		printf("Extracting features...\n");
+		
+		walk_features(ax, t, S_i, S_min, n_S, n_P, n_T, periods, min, max);
+		for (j = 0; j < n_S
+
+		//determine walking speed for each stride
+//		printf("Determining walking speeds...\n");
+		for (j = 0; j < n_S; j++)
+		{
+			fmax = -100;   
+		        input[0] = (float) periods[j];
+        		input[1] = (float) max[j];
+	        	input[2] = (float) min[j];
+	        	calc_out = fann_run(ann, input);
+	
+		        for (i = 0; i < 4; i++) 
+			{
+	         	   if (calc_out[i] > fmax) 
+			   {
+                		fmax = calc_out[i];
+	                	speed[j] = i+1;
+	        	    }
+       			}
+		}
+
+		for (i = 0; i < n_S; i++)
+		{
+			printf("Period: %f\t Max: %f\t Min: %f\t -> speed is %d\n", periods[i], max[i], min[i], speed[i]);
+			speed[i] = 0;
+			periods[i] = 0.0;
+		}
+		printf("Next set...\n");
+	}
+    }
+    fann_destroy(ann);
+    return 0;
 }

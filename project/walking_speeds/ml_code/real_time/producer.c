@@ -8,7 +8,7 @@
 #include "LSM9DS0.h"
 
 #define MILLION 1000000.0
-#define SAMPLES 1500
+#define SAMPLES 1000
 
 sig_atomic_t volatile run_flag = 1;
 
@@ -49,6 +49,8 @@ int main()
     g_res = calc_gyro_res(g_scale);
 
     signal(SIGINT, do_when_interrupted);
+
+    sleep(1);
 
     while (1) {
 

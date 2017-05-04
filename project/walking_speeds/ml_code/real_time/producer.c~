@@ -8,7 +8,7 @@
 #include "LSM9DS0.h"
 
 #define MILLION 1000000.0
-#define SAMPLES 1500
+#define SAMPLES 1000
 
 sig_atomic_t volatile run_flag = 1;
 
@@ -27,6 +27,8 @@ int main()
     
     int i, filenum = 0, sigma = 0;
 	
+    int fd;
+
     mraa_i2c_context accel, gyro;
     float a_res, g_res;
     double t, start_epoch, end_epoch;
@@ -48,6 +50,8 @@ int main()
 
     signal(SIGINT, do_when_interrupted);
 
+    sleep(1);
+
     while (1) {
 
 	sprintf(filename, "data_%d.txt", filenum);
@@ -60,6 +64,9 @@ int main()
 	}
 
 	//printf("Filenum: %d, Filename: %s\n", filenum, filename);
+
+	//fd = fileno(fp);
+	//flock(fd, LOCK_EX);
 
 	for (i = 0; i < SAMPLES; i++)
 	{
