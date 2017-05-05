@@ -8,7 +8,7 @@
 #include "LSM9DS0.h"
 
 #define MILLION 1000000.0
-#define SAMPLES 1000
+#define SAMPLES 3000
 
 sig_atomic_t volatile run_flag = 1;
 
@@ -17,8 +17,6 @@ void do_when_interrupted(int sig)
 	if (sig == SIGINT)
 		run_flag = 0;
 }
-
-void clear_buffer(float *arr, float val, int n);
 
 int main()
 {
@@ -50,8 +48,6 @@ int main()
 
     signal(SIGINT, do_when_interrupted);
 
-    sleep(1);
-
     while (1) {
 
 	sprintf(filename, "data_%d.txt", filenum);
@@ -65,8 +61,8 @@ int main()
 
 	//printf("Filenum: %d, Filename: %s\n", filenum, filename);
 
-	//fd = fileno(fp);
-	//flock(fd, LOCK_EX);
+	fd = fileno(fp);
+	flock(fd, LOCK_EX);
 
 	for (i = 0; i < SAMPLES; i++)
 	{
@@ -87,8 +83,8 @@ int main()
 	}
 
 	//printf("Next window\n");
-	filenum++;
 	fclose(fp);
+	filenum++;
     }
 
     return 0;
@@ -101,14 +97,5 @@ void adjust_window(float *arr, int sigma)
 	{
 		arr[i] = arr[SAMPLES - sigma + i];
 	}
-
-	return;	
+	return;
 }
-
-void clear_buffer(float *arr, float val, int n)
-{
-	int i;
-	for (i = 0; i < n; i++)
-		arr[i] = val;
-}
-
