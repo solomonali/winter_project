@@ -8,17 +8,8 @@
 #include <sys/file.h>
 
 #define MILLION 1000000.0
+//change SAMPLES for BOTH PRODUCER AND CONSUMER
 #define SAMPLES 4000
-
-sig_atomic_t volatile run_flag = 1;
-
-void do_when_interrupted(int sig)
-{
-
-
-	if (sig == SIGINT)
-		run_flag = 0;
-}
 
 int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T, int *n_P, int *n_T)
 {
@@ -138,20 +129,27 @@ void walk_features(float *arr, double *t, float *S_i, float *S_min, int n_S, int
 		idx = (int) S_i[i];
 		idx_min = (int) S_min[i];
 		idx_next = (int) S_i[i+1];
-		//((i+1)!=n_S)? period = t[idx_next]- t[idx]: period;
 		period = (t[idx_next] - t[idx]);
 		if (period < 0) { period = -period; }
 		periods[i] = period/10.0;
 		max[i] = arr[idx]/1000.0;
 		min[i] = arr[idx_min]/1000.0;
-//		printf("Period: %f\n", periods[i]);
-//		printf("Max: %f\n", max[i]);
-//		printf("Min: %f\n", min[i]);
-
 	}
 
 	return;
 }
+
+
+//add feauture extraction algorithms here
+//add parameters and change the return type if necessary
+void run_features()
+{}
+void turn_feautures() 
+{}
+void ascent_features()
+{}
+void descent_features()
+{}
 
 int main()
 {
@@ -162,26 +160,18 @@ int main()
     int n_S, n_P, n_T;
     fann_type *calc_out;
     fann_type input[3];
+    //intialize new fann networks here for different motions
     struct fann *f_walk;
    
+    //create new fann with appropriate train file
     f_walk = fann_create_from_file("walk.net");
 	
-    float min[size], max[size], fmax, threshold_gz=200;
+    float threshold_ax, threshold_ay, threshold_az, threshold_gx, threshold_gy, threshold_gz = 200; 
+    float min[size], max[size], fmax;
     float ax[SAMPLES+sigma], ay[SAMPLES+sigma], az[SAMPLES+sigma], gx[SAMPLES+sigma], gy[SAMPLES+sigma], gz[SAMPLES+sigma];
     float P_i[size*5], T_i[size*5], S_i[size], S_min[size];
     double t[SAMPLES+sigma], start_epoch, end_epoch, periods[size];
     struct timeval start, end;
-
-    signal(SIGINT, do_when_interrupted);
-    
-    //P_i = (float *) malloc+(sizeof(float) * (100));
-    //T_i = (float *) malloc(sizeof(float) * (100));
-    //periods = (double *) malloc(sizeof(double) * 100);
-    //min = (float *) malloc(sizeof(float) * 100);
-    //max = (float *) malloc(sizeof(float) * 100);
-    //S_i = (float *) malloc(sizeof(float) * 100); // P
-    //S_min = (float *) malloc(sizeof(float) * 100); // T
-    //speed = (int *) malloc(sizeof(int) * 100);
 
     FILE *fp;
     int fd, linecount;
@@ -229,7 +219,6 @@ int main()
 	flock(fd, LOCK_EX);	
 
 	i = 0;
-//	printf("Reading file...\n");
 
 	while ((read = getline(&line, &len, fp)) != -1 && i < 1500)
 	{
@@ -239,33 +228,14 @@ int main()
 
 	fclose(fp);
 	filenum++;
-	//printf("File read...\n");
-
-	//printf("Checking data...\n");
-
-//	printf("Finding peaks and troughs...\n");
+	
+	//find peaks and throughs for different axes w different thresholds
 	val = find_peaks_and_troughs(gz, SAMPLES, threshold_gz, P_i, T_i, &n_P, &n_T);
-//	printf("Check...\n");
-
-	/*
-	for (i = 0; i < n_P; i++)
-	{
-		printf("Peak: %f\n", gz[(int)P_i[i]]);
-	}
-
-	for (i = 0; i < n_T; i++)
-	{
-		printf("Trough: %f\n", gz[(int)T_i[i]]);
-	}
 
 	if (val < 0) {
 		fprintf(stderr, "find_peaks_and_throughs failed\n");
 		exit(EXIT_FAILURE);
-	}*/
-
-//	printf("Detecting strides...\n");
-
-//	printf("# of Peaks: %d\t # of Troughs: %d\n", n_P, n_T);
+	}
 
 	n_S = detect_strides(S_i, S_min, P_i, T_i, t, n_P, n_T);	
 
@@ -276,12 +246,12 @@ int main()
 	}
 	else
 	{
-//		printf("Extracting features...\n");
-		
+	
+		//extract motion features here
 		walk_features(gz, t, S_i, S_min, n_S, n_P, n_T, periods, min, max);
 
-		//determine walking speed for each stride
-//		printf("Determining walking speeds...\n");
+
+		//pass feautres to fann
 		for (j = 0; j < n_S; j++)
 		{
 			fmax = -100;   
@@ -300,6 +270,7 @@ int main()
        			}
 		}
 
+		//print output
 		for (i = 0; i < n_S; i++)
 		{
 			printf("Period: %f\t Max: %f\t Min: %f\t -> speed is %d\n", periods[i], max[i], min[i], speed[i]);

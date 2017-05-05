@@ -10,14 +10,6 @@
 #define MILLION 1000000.0
 #define SAMPLES 4000
 
-sig_atomic_t volatile run_flag = 1;
-
-void do_when_interrupted(int sig)
-{
-	if (sig == SIGINT)
-		run_flag = 0;
-}
-
 int main()
 {
     FILE *fp;
@@ -45,8 +37,6 @@ int main()
 	
     a_res = calc_accel_res(a_scale);
     g_res = calc_gyro_res(g_scale);
-
-    signal(SIGINT, do_when_interrupted);
 
     while (1) {
 
