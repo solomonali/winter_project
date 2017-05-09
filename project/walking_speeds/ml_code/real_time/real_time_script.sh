@@ -1,4 +1,5 @@
 #!/bin/sh
+rm -f data_*
 ./producer &
 PRODUCER_ID=$!
 ./consumer & 
