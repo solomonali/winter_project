@@ -67,7 +67,7 @@ int main()
 	
 		t = (start_epoch + end_epoch)/2.0;
 
-		fprintf(fp, "%lf,%f,%f,%f,%f,%f,%f\n", t, accel_data.x, accel_data.y, accel_data.z, gyro_data.x, gyro_data.y, gyro_data.z);
+		fprintf(fp, "%d,%lf,%f,%f,%f,%f,%f,%f\n", i+SAMPLES*filenum, t, accel_data.x, accel_data.y, accel_data.z, gyro_data.x, gyro_data.y, gyro_data.z);
 		
 		usleep(99);
 	}

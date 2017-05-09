@@ -11,7 +11,7 @@
 //change SAMPLES for BOTH PRODUCER AND CONSUMER
 #define SAMPLES 4000
 
-int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T, int *n_P, int *n_T)
+int find_peaks_and_troughs(float *arr,int n_samples, float E, int *P, int *T, int *n_P, int *n_T)
 {
 	int a, b, i, d, _n_P, _n_T;
 
@@ -72,7 +72,7 @@ int find_peaks_and_troughs(float *arr,int n_samples, float E, float *P, float *T
 	return 0;
 }
 
-int detect_strides(float *S_i, float *S_min, float *P_i, float *T_i, double *t, int n_P, int n_T)
+int detect_strides(int *S_i, int *S_min, int *P_i, int *T_i, int n_P, int n_T)
 {
 	int a, b, c, i, idx, n_S;
 	a = 0; b = 1; n_S = 0; c = 0; 
@@ -112,6 +112,24 @@ int detect_strides(float *S_i, float *S_min, float *P_i, float *T_i, double *t, 
 	return n_S;
 }
 
+/*
+void split_strides(int *S_i, int indexes[n_S][splits])
+{
+	int i, j, diff;
+	for(i = 0; i < n_S; i++)
+	{
+		diff = (S_i[i+1] - S_i[i])/splits;
+		for(j = 0; j < splits; j++)
+		{
+			indexes[i][j] = S_i[i] + j*diff;
+		}
+			
+	}
+
+	return;
+}
+*/
+
 void clear_buffer(float *arr, float val, int n)
 {
 	int i;
@@ -119,7 +137,7 @@ void clear_buffer(float *arr, float val, int n)
 		arr[i] = val;
 }
 
-void walk_features(float *arr, double *t, float *S_i, float *S_min, int n_S, int n_P, int n_T, double *periods, float *min, float *max)
+void walk_features(float *arr, double *t, int *S_i, int *S_min, int n_S, int n_P, int n_T, double *periods, float *min, float *max)
 {
 	int i, idx, idx_next, idx_min;
 	double period;
@@ -155,8 +173,14 @@ int main()
 {
 
     int i, j, idx, idx_min, idx_next, val, rv, sigma = 0, filenum = 0;
-    int size = 400;
+    int index[SAMPLES+sigma];
+    int size = 400, splits = 4;
     int speed[size];
+    const char *speeds[3];
+    speeds[0] = "FAST";
+    speeds[1] = "MEDIUM";
+    speeds[2] = "SLOW";
+    
     int n_S, n_P, n_T;
     fann_type *calc_out;
     fann_type input[3];
@@ -169,7 +193,8 @@ int main()
     float threshold_ax, threshold_ay, threshold_az, threshold_gx, threshold_gy, threshold_gz = 200; 
     float min[size], max[size], fmax;
     float ax[SAMPLES+sigma], ay[SAMPLES+sigma], az[SAMPLES+sigma], gx[SAMPLES+sigma], gy[SAMPLES+sigma], gz[SAMPLES+sigma];
-    float P_i[size*5], T_i[size*5], S_i[size], S_min[size];
+    int stride_index[size][splits], diff;
+    int P_i[size*5], T_i[size*5], S_i[size], S_min[size];
     double t[SAMPLES+sigma], start_epoch, end_epoch, periods[size];
     struct timeval start, end;
 
@@ -192,16 +217,16 @@ int main()
 	
 	for (i = 0; i < size*5; i++)
 	{
-		P_i[i] = 0.0f;
-		T_i[i] = 0.0f;
+		P_i[i] = 0;
+		T_i[i] = 0;
 	}
 
 	for (i = 0; i < size; i++)
 	{
 		min[i] = 0.0f;
 		max[i] = 0.0f;
-		S_i[i] = 0.0f;
-		S_min[i] = 0.0f;
+		S_i[i] = 0;
+		S_min[i] = 0;
 	}
 
 	fp = NULL;
@@ -220,24 +245,38 @@ int main()
 
 	i = 0;
 
-	while ((read = getline(&line, &len, fp)) != -1 && i < 1500)
+	while ((read = getline(&line, &len, fp)) != -1 && i < SAMPLES)
 	{
-		rv = sscanf(line, "%lf,%f,%f,%f,%f,%f,%f\n", &t[i], &ax[i], &ay[i], &az[i], &gx[i], &gy[i], &gz[i]);
+		rv = sscanf(line, "%d,%lf,%f,%f,%f,%f,%f,%f\n", &index[i], &t[i], &ax[i], &ay[i], &az[i], &gx[i], &gy[i], &gz[i]);
 		i++;
 	}
 
 	fclose(fp);
 	filenum++;
 	
+	/*
+	for (i = 0; i < SAMPLES; i++)
+	{
+		printf("%d\n", index[i]);
+	}
+	*/
+
 	//find peaks and throughs for different axes w different thresholds
 	val = find_peaks_and_troughs(gz, SAMPLES, threshold_gz, P_i, T_i, &n_P, &n_T);
+/*
+	for (i = 0; i < n_P; i++)
+	{printf("Peak: %d\n", P_i[i]);}
 
+	for (i = 0; i < n_T; i++)
+	{printf("Trough: %d\n", T_i[i]);}
+*/
+	
 	if (val < 0) {
 		fprintf(stderr, "find_peaks_and_throughs failed\n");
 		exit(EXIT_FAILURE);
 	}
 
-	n_S = detect_strides(S_i, S_min, P_i, T_i, t, n_P, n_T);	
+	n_S = detect_strides(S_i, S_min, P_i, T_i, n_P, n_T);	
 
 	if (n_S < 1)
 	{
@@ -246,13 +285,36 @@ int main()
 	}
 	else
 	{
+		for (i = 0; i < n_S-1; i++)
+		{
+			if (i < n_S - 1)
+			{
+				diff = (S_i[i+1] - S_i[i])/splits;
+			}
+			else
+			{
+				diff = S_min[i] - S_i[i];
+			}
+			
+			for (j = 0; j < splits; j++)
+			{
+				stride_index[i][j] = S_i[i] + j*diff;
+			}
+				
+		}
+			
+		for (i = 0; i < n_S-1; i++)
+		{
+			printf("Stride: %d\n", S_i[i]);
+			printf("1st slot: %d\t2nd slot: %d\t3rd slot: %d\t4th slot: %d\n", stride_index[i][0], stride_index[i][1], stride_index[i][2], stride_index[i][3]);
+		}
 	
 		//extract motion features here
 		walk_features(gz, t, S_i, S_min, n_S, n_P, n_T, periods, min, max);
 
 
 		//pass feautres to fann
-		for (j = 0; j < n_S; j++)
+		for (j = 0; j < n_S-1; j++)
 		{
 			fmax = -100;   
 		        input[0] = (float) periods[j];
@@ -260,20 +322,20 @@ int main()
 	        	input[2] = (float) min[j];
 	        	calc_out = fann_run(f_walk, input);
 	
-		        for (i = 0; i < 4; i++) 
+		        for (i = 0; i < 3; i++) 
 			{
 	         	   if (calc_out[i] > fmax) 
 			   {
                 		fmax = calc_out[i];
-	                	speed[j] = i+1;
+	                	speed[j] = i;
 	        	    }
        			}
 		}
 
 		//print output
-		for (i = 0; i < n_S; i++)
+		for (i = 0; i < n_S-1; i++)
 		{
-			printf("Period: %f\t Max: %f\t Min: %f\t -> speed is %d\n", periods[i], max[i], min[i], speed[i]);
+			printf("Period: %f\t Max: %f\t Min: %f\t -> speed is %s\n", periods[i], max[i], min[i], speeds[speed[i]]);
 			speed[i] = 0;
 			periods[i] = 0.0;
 		}
