@@ -2,7 +2,7 @@
 
 int main()
 {
-    const unsigned int num_input = 3;
+    const unsigned int num_input = 16;
     const unsigned int num_output = 3;
     const unsigned int num_layers = 3;
     const unsigned int num_neurons_hidden = 9;
@@ -16,10 +16,10 @@ int main()
     fann_set_activation_function_hidden(ann, FANN_SIGMOID_SYMMETRIC);
     fann_set_activation_function_output(ann, FANN_SIGMOID_SYMMETRIC);
 
-    fann_train_on_file(ann, "train_set.txt", max_epochs,
+    fann_train_on_file(ann, "train_set_turn.txt", max_epochs,
         epochs_between_reports, desired_error);
 
-    fann_save(ann, "TEST.net");
+    fann_save(ann, "turn.net");
 
     fann_destroy(ann);
 
