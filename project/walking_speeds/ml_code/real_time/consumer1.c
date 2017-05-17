@@ -155,40 +155,38 @@ int detect_strides(int *S_i, int *S_min, int *P_i, int *T_i, int n_P, int n_T)
 	return n_S;
 }
 
-void LPF(float *arr1, float *arr2, float *arr3, float *arr4, float *arr5, float *arr6, float *smooth1, float *smooth2, float *smooth3, float *smooth4, float *smooth5, float *smooth6, int samples, int k)
+void LPF(float *arr, float *smooth, int samples, int k)
 {
-	int i, b;
-  
-  b = (1-2*exp(-k));
- 
-	smooth1[0] = arr1[0];
-  smooth2[0] = arr2[0];
-  smooth3[0] = arr3[0];
-  smooth4[0] = arr4[0];
-  smooth5[0] = arr5[0];
-  smooth6[0] = arr6[0];	
-  for (i = 1; i < samples; i++)
+	int i;
+	smooth[0] = arr[0];
+	for (i = 1; i < samples; i++)
 	{
-		smooth1[i] = b * smooth1[i-1] + arr1[i];
-    smooth2[i] = b * smooth2[i-1] + arr2[i];
-    smooth3[i] = b * smooth3[i-1] + arr3[i];
-    smooth4[i] = b * smooth4[i-1] + arr4[i];
-    smooth5[i] = b * smooth5[i-1] + arr5[i];
-    smooth6[i] = b * smooth6[i-1] + arr6[i];
+		smooth[i] = (1-2*exp(-k)) * smooth[i-1] + arr[i];
 	}
 
 	for (i = 0; i < samples; i++)
-	{
-    smooth1[i] = smooth1[i]/15.0;
-    smooth2[i] = smooth2[i]/15.0;
-    smooth3[i] = smooth3[i]/15.0;
-    smooth4[i] = smooth4[i]/15.0;
-    smooth5[i] = smooth5[i]/15.0;
-    smooth6[i] = smooth6[i]/15.0;
-  }
+	{smooth[i] = smooth[i]/15.0;}
 
 	return;
 }
+
+/*
+void split_strides(int *S_i, int indexes[n_S][splits])
+{
+	int i, j, diff;
+	for(i = 0; i < n_S; i++)
+	{
+		diff = (S_i[i+1] - S_i[i])/splits;
+		for(j = 0; j < splits; j++)
+		{
+			indexes[i][j] = S_i[i] + j*diff;
+		}
+			
+	}
+
+	return;
+}
+*/
 
 void clear_buffer(float *arr, float val, int n)
 {
@@ -329,7 +327,7 @@ int main()
     f_walk = fann_create_from_file("walk.net");
     f_turn = fann_create_from_file("turn.net");
 	
-    float threshold_ax, threshold_ay, threshold_az, threshold_gx, threshold_gy, threshold_gz = 120; 
+    float threshold_ax, threshold_ay, threshold_az, threshold_gx, threshold_gy, threshold_gz = 200; 
     float min[size], max[size], fmax;
     float ax[SAMPLES+sigma], ay[SAMPLES+sigma], az[SAMPLES+sigma], gx[SAMPLES+sigma], gy[SAMPLES+sigma], gz[SAMPLES+sigma];
     float ax_s[SAMPLES+sigma], ay_s[SAMPLES+sigma], az_s[SAMPLES+sigma], gx_s[SAMPLES+sigma], gy_s[SAMPLES+sigma], gz_s[SAMPLES+sigma];
@@ -410,10 +408,10 @@ int main()
 
 	//find peaks and throughs for different axes w different thresholds
 	
-	LPF(ax, ay, az, gx, gy, gz, ax_s, ay_s, az_s, gx_s, gy_s, gz_s, SAMPLES, k_LPF);
+	LPF(gz, gz, SAMPLES, k_LPF);
 
-	val = find_peaks_and_troughs(gz_s, SAMPLES, threshold_gz, P_i, T_i, &n_P, &n_T);
-	/*
+	val = find_peaks_and_troughs(gz, SAMPLES, threshold_gz, P_i, T_i, &n_P, &n_T);
+	
 	for (i = 0; i < n_P; i++)
 	{printf("Peak: %d\n", P_i[i]);}
 
@@ -423,7 +421,7 @@ int main()
 		fprintf(stderr, "find_peaks_and_throughs failed\n");
 		exit(EXIT_FAILURE);
 	}
-*/
+
 	n_S = detect_strides(S_i, S_min, P_i, T_i, n_P, n_T);	
 
 	if (n_S < 1)
@@ -433,23 +431,23 @@ int main()
 	}
 	else
 	{
-/*		for (i = 0; i < n_S; i++)
+		for (i = 0; i < n_S; i++)
 		{
 		//	printf("x_ac_var2: %f\tz_gy_mean3: %f\ty_ac_mean1: %f\n", x_ac_var2[i], z_gy_mean3[i], y_ac_mean1[i]); 
 			printf("Stride: %d\n", S_i[i]);
-		}*/
+		}
 
 		//extract motion features here
-		//printf("Finding features...\n");
+		printf("Finding features...\n");
 
 		walk_features(gz_s, t, S_i, S_min, n_S, n_P, n_T, periods, min, max, idx, idx_min, idx_next);
 
-		//printf("Walk features found...\n");
+		printf("Walk features found...\n");
 
-		calc_stats( ax_s,  ay_s,  az_s,  gx_s,  gy_s,  gz_s, n_S, idx_next, idx,  x_ac_mean1,  x_ac_mean2,  x_ac_mean3, x_ac_mean4,  x_ac_var1,  x_ac_var2,  x_ac_var3,  x_ac_var4,  y_ac_mean1,  y_ac_mean2,  y_ac_mean3, y_ac_mean4,  y_ac_var1,  y_ac_var2,  y_ac_var3,  y_ac_var4,  z_ac_mean1,  z_ac_mean2,  z_ac_mean3, z_ac_mean4,  z_ac_var1,  z_ac_var2,  z_ac_var3,  z_ac_var4,  x_gy_mean1,  x_gy_mean2,  x_gy_mean3, x_gy_mean4,  x_gy_var1,  x_gy_var2,  x_gy_var3,  x_gy_var4,  y_gy_mean1,  y_gy_mean2,  y_gy_mean3, y_gy_mean4,  y_gy_var1,  y_gy_var2,  y_gy_var3,  y_gy_var4,  z_gy_mean1,  z_gy_mean2,  z_gy_mean3, z_gy_mean4,  z_gy_var1,  z_gy_var2,  z_gy_var3,  z_gy_var4);
+		calc_stats( ax,  ay,  az,  gx,  gy,  gz, n_S, idx_next, idx,  x_ac_mean1,  x_ac_mean2,  x_ac_mean3, x_ac_mean4,  x_ac_var1,  x_ac_var2,  x_ac_var3,  x_ac_var4,  y_ac_mean1,  y_ac_mean2,  y_ac_mean3, y_ac_mean4,  y_ac_var1,  y_ac_var2,  y_ac_var3,  y_ac_var4,  z_ac_mean1,  z_ac_mean2,  z_ac_mean3, z_ac_mean4,  z_ac_var1,  z_ac_var2,  z_ac_var3,  z_ac_var4,  x_gy_mean1,  x_gy_mean2,  x_gy_mean3, x_gy_mean4,  x_gy_var1,  x_gy_var2,  x_gy_var3,  x_gy_var4,  y_gy_mean1,  y_gy_mean2,  y_gy_mean3, y_gy_mean4,  y_gy_var1,  y_gy_var2,  y_gy_var3,  y_gy_var4,  z_gy_mean1,  z_gy_mean2,  z_gy_mean3, z_gy_mean4,  z_gy_var1,  z_gy_var2,  z_gy_var3,  z_gy_var4);
    
 
-		//printf("Turn Features found...\n");
+		printf("Turn Features found...\n");
 
 			//pass feautres to fann
 		for (j = 0; j < n_S; j++)
@@ -472,7 +470,7 @@ int main()
 		for (j = 0; j < n_S; j++)
 		{
 			fmax = -100;
-  //    printf("%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n", x_gy_mean1[j]/100, x_gy_mean2[j]/10, x_gy_mean3[j]/10, x_gy_mean4[j]/10, z_ac_var1[j], z_ac_var2[j], z_ac_var3[j], z_ac_var4[j], y_gy_var1[j]/1000, y_gy_var2[j]/100, y_gy_var3[j]/100, y_gy_var4[j]/100, z_gy_var1[j]/10000, z_gy_var2[j]/10000, z_gy_var3[j]/10000, z_gy_var4[j]/10000);
+      printf("%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n", x_gy_mean1[j]/100, x_gy_mean2[j]/10, x_gy_mean3[j]/10, x_gy_mean4[j]/10, z_ac_var1[j], z_ac_var2[j], z_ac_var3[j], z_ac_var4[j], y_gy_var1[j]/1000, y_gy_var2[j]/100, y_gy_var3[j]/100, y_gy_var4[j]/100, z_gy_var1[j]/10000, z_gy_var2[j]/10000, z_gy_var3[j]/10000, z_gy_var4[j]/10000);
 			turn_input[0] = (float) x_gy_mean1[j]/100;
 			turn_input[1] = (float) x_gy_mean2[j]/10;
 			turn_input[2] = (float) x_gy_mean3[j]/10;
@@ -502,7 +500,7 @@ int main()
 			}	
 		}	
 
-//		printf("FANN complete...\n");
+		printf("FANN complete...\n");
 
 
 		//print output

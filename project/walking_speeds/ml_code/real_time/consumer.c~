@@ -327,7 +327,7 @@ int main()
     f_walk = fann_create_from_file("walk.net");
     f_turn = fann_create_from_file("turn.net");
 	
-    float threshold_ax, threshold_ay, threshold_az, threshold_gx, threshold_gy, threshold_gz = 200; 
+    float threshold_ax, threshold_ay, threshold_az, threshold_gx, threshold_gy, threshold_gz = 120; 
     float min[size], max[size], fmax;
     float ax[SAMPLES+sigma], ay[SAMPLES+sigma], az[SAMPLES+sigma], gx[SAMPLES+sigma], gy[SAMPLES+sigma], gz[SAMPLES+sigma];
     float ax_s[SAMPLES+sigma], ay_s[SAMPLES+sigma], az_s[SAMPLES+sigma], gx_s[SAMPLES+sigma], gy_s[SAMPLES+sigma], gz_s[SAMPLES+sigma];
@@ -408,10 +408,10 @@ int main()
 
 	//find peaks and throughs for different axes w different thresholds
 	
-	LPF(gz, gz, SAMPLES, k_LPF);
+	//LPF(gz, gz, SAMPLES, k_LPF);
 
 	val = find_peaks_and_troughs(gz, SAMPLES, threshold_gz, P_i, T_i, &n_P, &n_T);
-	
+	/*
 	for (i = 0; i < n_P; i++)
 	{printf("Peak: %d\n", P_i[i]);}
 
@@ -421,7 +421,7 @@ int main()
 		fprintf(stderr, "find_peaks_and_throughs failed\n");
 		exit(EXIT_FAILURE);
 	}
-
+*/
 	n_S = detect_strides(S_i, S_min, P_i, T_i, n_P, n_T);	
 
 	if (n_S < 1)
@@ -431,23 +431,23 @@ int main()
 	}
 	else
 	{
-		for (i = 0; i < n_S; i++)
+/*		for (i = 0; i < n_S; i++)
 		{
 		//	printf("x_ac_var2: %f\tz_gy_mean3: %f\ty_ac_mean1: %f\n", x_ac_var2[i], z_gy_mean3[i], y_ac_mean1[i]); 
 			printf("Stride: %d\n", S_i[i]);
-		}
+		}*/
 
 		//extract motion features here
-		printf("Finding features...\n");
+		//printf("Finding features...\n");
 
-		walk_features(gz_s, t, S_i, S_min, n_S, n_P, n_T, periods, min, max, idx, idx_min, idx_next);
+		walk_features(gz, t, S_i, S_min, n_S, n_P, n_T, periods, min, max, idx, idx_min, idx_next);
 
-		printf("Walk features found...\n");
+		//printf("Walk features found...\n");
 
 		calc_stats( ax,  ay,  az,  gx,  gy,  gz, n_S, idx_next, idx,  x_ac_mean1,  x_ac_mean2,  x_ac_mean3, x_ac_mean4,  x_ac_var1,  x_ac_var2,  x_ac_var3,  x_ac_var4,  y_ac_mean1,  y_ac_mean2,  y_ac_mean3, y_ac_mean4,  y_ac_var1,  y_ac_var2,  y_ac_var3,  y_ac_var4,  z_ac_mean1,  z_ac_mean2,  z_ac_mean3, z_ac_mean4,  z_ac_var1,  z_ac_var2,  z_ac_var3,  z_ac_var4,  x_gy_mean1,  x_gy_mean2,  x_gy_mean3, x_gy_mean4,  x_gy_var1,  x_gy_var2,  x_gy_var3,  x_gy_var4,  y_gy_mean1,  y_gy_mean2,  y_gy_mean3, y_gy_mean4,  y_gy_var1,  y_gy_var2,  y_gy_var3,  y_gy_var4,  z_gy_mean1,  z_gy_mean2,  z_gy_mean3, z_gy_mean4,  z_gy_var1,  z_gy_var2,  z_gy_var3,  z_gy_var4);
    
 
-		printf("Turn Features found...\n");
+		//printf("Turn Features found...\n");
 
 			//pass feautres to fann
 		for (j = 0; j < n_S; j++)
@@ -470,6 +470,7 @@ int main()
 		for (j = 0; j < n_S; j++)
 		{
 			fmax = -100;
+  //    printf("%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n", x_gy_mean1[j]/100, x_gy_mean2[j]/10, x_gy_mean3[j]/10, x_gy_mean4[j]/10, z_ac_var1[j], z_ac_var2[j], z_ac_var3[j], z_ac_var4[j], y_gy_var1[j]/1000, y_gy_var2[j]/100, y_gy_var3[j]/100, y_gy_var4[j]/100, z_gy_var1[j]/10000, z_gy_var2[j]/10000, z_gy_var3[j]/10000, z_gy_var4[j]/10000);
 			turn_input[0] = (float) x_gy_mean1[j]/100;
 			turn_input[1] = (float) x_gy_mean2[j]/10;
 			turn_input[2] = (float) x_gy_mean3[j]/10;
@@ -486,6 +487,8 @@ int main()
 			turn_input[13] = (float) z_gy_var2[j]/10000;
 			turn_input[14] = (float) z_gy_var3[j]/10000;
 			turn_input[15] = (float) z_gy_var4[j]/10000;
+			
+			
 			turn_calc_out = fann_run(f_turn, turn_input);
 			for (i = 0; i < 3; i++)
 			{
@@ -497,7 +500,7 @@ int main()
 			}	
 		}	
 
-		printf("FANN complete...\n");
+//		printf("FANN complete...\n");
 
 
 		//print output

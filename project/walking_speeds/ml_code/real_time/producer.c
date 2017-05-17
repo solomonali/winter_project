@@ -8,7 +8,7 @@
 #include "LSM9DS0.h"
 
 #define MILLION 1000000.0
-#define SAMPLES 4000
+#define SAMPLES 1500
 
 int main()
 {
